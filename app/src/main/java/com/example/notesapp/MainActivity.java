@@ -1,6 +1,7 @@
 package com.example.notesapp;
 
 import android.os.Bundle;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -34,6 +35,7 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setAllowFileAccess(true);
 
         webView.setWebViewClient(new WebViewClient());
+        webView.setWebChromeClient(new WebChromeClient()); // Enables JS alerts/confirms
         webView.loadUrl("file:///android_asset/index.html");
     }
 
