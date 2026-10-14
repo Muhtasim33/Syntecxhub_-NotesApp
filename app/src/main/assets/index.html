@@ -41,7 +41,7 @@
       display: flex;
       justify-content: center;
       min-height: 100vh;
-      padding-bottom: 70px;
+      padding-bottom: 75px;
     }
 
     .app-container {
@@ -151,7 +151,7 @@
       color: var(--text-main);
     }
 
-    input[type="text"], textarea {
+    input[type="text"], input[type="datetime-local"], textarea {
       width: 100%;
       padding: 12px;
       border: 1px solid var(--border-color);
@@ -166,7 +166,7 @@
       resize: vertical;
     }
 
-    input[type="text"]:focus, textarea:focus {
+    input[type="text"]:focus, input[type="datetime-local"]:focus, textarea:focus {
       border-color: var(--primary-color);
       box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
     }
@@ -274,11 +274,17 @@
       box-shadow: var(--shadow);
     }
 
+    .note-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+
     .note-title {
       font-size: 16px;
       font-weight: 700;
       color: var(--text-main);
-      margin-bottom: 6px;
     }
 
     .note-snippet {
@@ -328,6 +334,9 @@
       color: var(--text-main);
       border-bottom: 1px solid var(--border-color);
       padding-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     .detail-body {
@@ -346,6 +355,7 @@
       padding: 4px 10px;
       border-radius: 6px;
       margin-right: 8px;
+      margin-bottom: 6px;
     }
 
     /* Empty state */
@@ -372,6 +382,95 @@
     .stat-value {
       font-weight: 700;
       color: var(--primary-color);
+    }
+
+    /* Bulleted List & Favorites Styles */
+    .bullet-list {
+      list-style-type: none;
+      padding-left: 0;
+      margin: 10px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .bullet-item {
+      font-size: 15px;
+      color: var(--primary-color);
+      cursor: pointer;
+      font-weight: 600;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    .bullet-item:hover {
+      background: #e0e7ff;
+      color: var(--primary-hover);
+    }
+
+    .star-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      transition: transform 0.15s;
+    }
+
+    .star-btn:active {
+      transform: scale(1.25);
+    }
+
+    .settings-section {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .settings-section h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-main);
+    }
+
+    .mini-card {
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+
+    .mini-card:hover {
+      background: #f1f5f9;
+    }
+
+    .reminder-badge {
+      font-size: 12px;
+      background: #fef3c7;
+      color: #b45309;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
     }
 
     /* Modal Confirmation Dialog Styles */
@@ -475,7 +574,7 @@
     }
   </script>
 
-  <!-- React Single Page Application with Page Navigation & Custom Modals -->
+  <!-- React Single Page Application with Favourites, Reminders, and Bulleted Notes -->
   <script type="text/babel">
     const { useState, useRef, useEffect } = React;
 
@@ -491,7 +590,9 @@
             {
               id: '1',
               title: 'Welcome Note 📝',
-              body: 'Welcome to your Notes Application! Navigate between the Home List, Detail View, Editor, and Settings screens seamlessly.',
+              body: 'Welcome to your Notes Application! Star notes as favourites, set reminders, and navigate between screens seamlessly.',
+              isFavorite: true,
+              reminder: null,
               createdAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               updatedAt: null
             }
@@ -505,6 +606,7 @@
       // 3. Form input state & selection state
       const [titleInput, setTitleInput] = useState('');
       const [bodyInput, setBodyInput] = useState('');
+      const [reminderInput, setReminderInput] = useState('');
       const [selectedNoteId, setSelectedNoteId] = useState(null);
       const [editingId, setEditingId] = useState(null);
       const [deletingNoteId, setDeletingNoteId] = useState(null);
@@ -543,12 +645,14 @@
         setSelectedNoteId(null);
         setTitleInput('');
         setBodyInput('');
+        setReminderInput('');
       };
 
       const goToAddNote = () => {
         setEditingId(null);
         setTitleInput('');
         setBodyInput('');
+        setReminderInput('');
         setCurrentView('EDITOR');
       };
 
@@ -557,6 +661,7 @@
         setEditingId(note.id);
         setTitleInput(note.title || '');
         setBodyInput(note.body || '');
+        setReminderInput(note.reminder || '');
         setCurrentView('EDITOR');
       };
 
@@ -567,6 +672,21 @@
 
       const goToSettings = () => {
         setCurrentView('SETTINGS');
+      };
+
+      // --- FAVOURITES & REMINDERS HANDLERS ---
+      const toggleFavorite = (id, e) => {
+        if (e) e.stopPropagation();
+        setNotes(notes.map(note =>
+          note.id === id ? { ...note, isFavorite: !note.isFavorite } : note
+        ));
+      };
+
+      const clearReminder = (id, e) => {
+        if (e) e.stopPropagation();
+        setNotes(notes.map(note =>
+          note.id === id ? { ...note, reminder: null } : note
+        ));
       };
 
       // --- NOTE ACTIONS ---
@@ -583,7 +703,7 @@
           // Update existing note
           setNotes(notes.map(note =>
             note.id === editingId
-              ? { ...note, title: trimmedTitle, body: trimmedBody, updatedAt: timeString }
+              ? { ...note, title: trimmedTitle, body: trimmedBody, reminder: reminderInput || null, updatedAt: timeString }
               : note
           ));
         } else {
@@ -592,6 +712,8 @@
             id: Date.now().toString(),
             title: trimmedTitle,
             body: trimmedBody,
+            isFavorite: false,
+            reminder: reminderInput || null,
             createdAt: timeString,
             updatedAt: null
           };
@@ -631,6 +753,18 @@
         (note.body && note.body.toLowerCase().includes(searchTerm.toLowerCase()))
       );
 
+      const favoriteNotes = notes.filter(n => n.isFavorite);
+      const reminderNotes = notes.filter(n => n.reminder);
+
+      const formatReminderDate = (dateStr) => {
+        if (!dateStr) return '';
+        try {
+          return new Date(dateStr).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+        } catch (err) {
+          return dateStr;
+        }
+      };
+
       return (
         <div className="app-container">
 
@@ -654,6 +788,9 @@
               )}
               {currentView === 'DETAIL' && selectedNote && (
                 <>
+                  <button onClick={(e) => toggleFavorite(selectedNote.id, e)} className="star-btn">
+                    {selectedNote.isFavorite ? '⭐' : '☆'}
+                  </button>
                   <button onClick={(e) => goToEditNote(selectedNote, e)} className="btn btn-outline btn-sm">
                     ✏️ Edit
                   </button>
@@ -703,8 +840,23 @@
                 ) : (
                   filteredNotes.map(note => (
                     <div key={note.id} className="note-card" onClick={() => goToDetail(note)}>
-                      <div className="note-title">{note.title}</div>
+                      <div className="note-card-top">
+                        <div className="note-title">{note.title}</div>
+                        <button onClick={(e) => toggleFavorite(note.id, e)} className="star-btn" title="Toggle Favourite">
+                          {note.isFavorite ? '⭐' : '☆'}
+                        </button>
+                      </div>
+
+                      {note.reminder && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <span className="reminder-badge">
+                            ⏰ {formatReminderDate(note.reminder)}
+                          </span>
+                        </div>
+                      )}
+
                       <div className="note-snippet">{note.body}</div>
+
                       <div className="note-footer">
                         <span className="note-date">
                           {note.updatedAt ? `Updated: ${note.updatedAt}` : `Created: ${note.createdAt}`}
@@ -728,12 +880,22 @@
           {/* ==================== LAYOUT 2: NOTE DETAIL VIEW ==================== */}
           {currentView === 'DETAIL' && selectedNote && (
             <div className="card detail-container">
-              <h1 className="detail-title">{selectedNote.title}</h1>
+              <div className="detail-title">
+                <span>{selectedNote.title}</span>
+                <button onClick={(e) => toggleFavorite(selectedNote.id, e)} className="star-btn">
+                  {selectedNote.isFavorite ? '⭐' : '☆'}
+                </button>
+              </div>
 
               <div>
                 <span className="meta-badge">📅 {selectedNote.updatedAt ? `Updated ${selectedNote.updatedAt}` : `Created ${selectedNote.createdAt}`}</span>
                 <span className="meta-badge">📊 {selectedNote.body ? selectedNote.body.trim().split(/\s+/).length : 0} words</span>
                 <span className="meta-badge">🔤 {selectedNote.body ? selectedNote.body.length : 0} chars</span>
+                {selectedNote.reminder && (
+                  <span className="reminder-badge" style={{ fontSize: '12px' }}>
+                    ⏰ Reminder: {formatReminderDate(selectedNote.reminder)}
+                  </span>
+                )}
               </div>
 
               <div className="detail-body">
@@ -786,6 +948,16 @@
                   />
                 </div>
 
+                <div className="input-group">
+                  <label htmlFor="reminderInput">⏰ Set Reminder (Optional)</label>
+                  <input
+                    id="reminderInput"
+                    type="datetime-local"
+                    value={reminderInput}
+                    onChange={(e) => setReminderInput(e.target.value)}
+                  />
+                </div>
+
                 <div className="button-group">
                   <button type="submit" className="btn btn-primary">
                     💾 Save Note
@@ -798,10 +970,10 @@
             </div>
           )}
 
-          {/* ==================== LAYOUT 4: SETTINGS / STATS VIEW ==================== */}
+          {/* ==================== LAYOUT 4: SETTINGS VIEW ==================== */}
           {currentView === 'SETTINGS' && (
             <div className="card">
-              <h2 style={{ marginBottom: '16px' }}>⚙️ App Settings & Usage</h2>
+              <h2 style={{ marginBottom: '16px' }}>⚙️ App Settings & Overview</h2>
 
               <div className="stat-row">
                 <span>Total Saved Notes</span>
@@ -813,13 +985,64 @@
                   {notes.reduce((acc, curr) => acc + (curr.body ? curr.body.trim().split(/\s+/).filter(Boolean).length : 0), 0)}
                 </span>
               </div>
-              <div className="stat-row">
-                <span>Storage Engine</span>
-                <span className="stat-value">window.localStorage</span>
+
+              {/* 1. FAVOURITES SECTION */}
+              <div className="settings-section">
+                <h3>⭐ Favourites ({favoriteNotes.length})</h3>
+                {favoriteNotes.length === 0 ? (
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No favourite notes starred yet.</p>
+                ) : (
+                  favoriteNotes.map(note => (
+                    <div key={note.id} className="mini-card" onClick={() => goToDetail(note)}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '14px' }}>{note.title}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{note.createdAt}</div>
+                      </div>
+                      <button onClick={(e) => toggleFavorite(note.id, e)} className="star-btn" title="Remove Favourite">
+                        ⭐
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
-              <div className="stat-row">
-                <span>State Engine</span>
-                <span className="stat-value">React useState & useRef</span>
+
+              {/* 2. ALL NOTES WITH TITLE IN BULLET POINT SECTION */}
+              <div className="settings-section">
+                <h3>📌 All Notes (Bulleted Titles)</h3>
+                {notes.length === 0 ? (
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No notes available.</p>
+                ) : (
+                  <ul className="bullet-list">
+                    {notes.map(note => (
+                      <li key={note.id} onClick={() => goToDetail(note)} className="bullet-item">
+                        <span>• {note.title}</span>
+                        <span>{note.isFavorite ? '⭐' : '›'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* 3. REMINDERS SECTION */}
+              <div className="settings-section">
+                <h3>⏰ Reminders ({reminderNotes.length})</h3>
+                {reminderNotes.length === 0 ? (
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No active reminders scheduled.</p>
+                ) : (
+                  reminderNotes.map(note => (
+                    <div key={note.id} className="mini-card" onClick={() => goToDetail(note)}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '14px' }}>{note.title}</div>
+                        <div className="reminder-badge" style={{ marginTop: '4px' }}>
+                          ⏰ {formatReminderDate(note.reminder)}
+                        </div>
+                      </div>
+                      <button onClick={(e) => clearReminder(note.id, e)} className="btn btn-outline btn-sm" title="Clear Reminder">
+                        🔕 Clear
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div style={{ marginTop: '24px' }}>
