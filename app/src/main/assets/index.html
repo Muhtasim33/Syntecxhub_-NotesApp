@@ -5,10 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Notes Application</title>
 
-  <!-- React & ReactDOM UMD Libraries + Babel Standalone -->
+  <!-- React & ReactDOM UMD Libraries -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
     :root {
@@ -132,17 +131,63 @@
       border: 1px solid var(--border-color);
     }
 
+    /* Spacious Editor Specific Card Styles */
+    .editor-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px 20px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border-color);
+      min-height: calc(100vh - 180px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .editor-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--primary-color);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-title-large {
+      font-size: 18px !important;
+      font-weight: 600 !important;
+      padding: 14px 16px !important;
+      border-radius: 10px !important;
+    }
+
+    .textarea-large {
+      min-height: 280px !important;
+      font-size: 16px !important;
+      line-height: 1.6 !important;
+      padding: 16px !important;
+      border-radius: 10px !important;
+      flex-grow: 1;
+    }
+
+    .btn-large {
+      padding: 12px 24px !important;
+      font-size: 15px !important;
+      font-weight: 700 !important;
+    }
+
     /* Form Layout Elements */
     .input-form {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 18px;
+      flex-grow: 1;
     }
 
     .input-group {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
     }
 
     label {
@@ -173,8 +218,9 @@
 
     .button-group {
       display: flex;
-      gap: 10px;
+      gap: 12px;
       flex-wrap: wrap;
+      margin-top: 10px;
     }
 
     .btn {
@@ -504,16 +550,18 @@
 
   <div id="root"></div>
 
-  <!-- Offline Fallback Engine -->
+  <!-- Offline Standalone React Runtime -->
   <script>
     if (!window.React || !window.ReactDOM) {
-      console.warn("React CDN unreachable. Initializing offline standalone runtime...");
       let stateStore = [];
       let stateCursor = 0;
       let rootContainer = null;
       let appRenderer = null;
 
       window.React = {
+        createElement(type, props, ...children) {
+          return { type, props: props || {}, children: children.flat().filter(c => c !== null && c !== undefined && c !== false) };
+        },
         useState(initialVal) {
           const idx = stateCursor++;
           if (stateStore[idx] === undefined) {
@@ -549,10 +597,41 @@
         }
       };
 
+      function renderVNode(vnode) {
+        if (typeof vnode === 'string' || typeof vnode === 'number') {
+          return document.createTextNode(vnode);
+        }
+        if (typeof vnode.type === 'function') {
+          return renderVNode(vnode.type(vnode.props));
+        }
+        const el = document.createElement(vnode.type);
+        const { children, ...props } = vnode.props;
+        Object.keys(props).forEach(key => {
+          if (key.startsWith('on') && typeof props[key] === 'function') {
+            const eventName = key.substring(2).toLowerCase();
+            el.addEventListener(eventName, props[key]);
+          } else if (key === 'className') {
+            el.className = props[key];
+          } else if (key === 'ref' && props[key]) {
+            props[key].current = el;
+          } else if (key === 'style' && typeof props[key] === 'object') {
+            Object.assign(el.style, props[key]);
+          } else if (key !== 'key') {
+            el.setAttribute(key, props[key]);
+          }
+        });
+        (vnode.children || []).forEach(child => {
+          if (child) el.appendChild(renderVNode(child));
+        });
+        return el;
+      }
+
       function reRender() {
         if (appRenderer && rootContainer) {
           stateCursor = 0;
-          appRenderer();
+          rootContainer.innerHTML = '';
+          const node = renderVNode(appRenderer());
+          rootContainer.appendChild(node);
         }
       }
 
@@ -561,11 +640,7 @@
           rootContainer = container;
           return {
             render(componentFn) {
-              appRenderer = () => {
-                container.innerHTML = '';
-                const node = componentFn();
-                if (node instanceof Node) container.appendChild(node);
-              };
+              appRenderer = () => React.createElement(componentFn, null);
               reRender();
             }
           };
@@ -574,15 +649,13 @@
     }
   </script>
 
-  <!-- React Single Page Application with Favourites, Reminders, and Bulleted Notes -->
-  <script type="text/babel">
-    const { useState, useRef, useEffect } = React;
+  <!-- React Single Page Application JS -->
+  <script>
+    const { useState, useRef, useEffect, createElement: h } = React;
 
     function NotesApp() {
-      // 1. Navigation View State: 'LIST' | 'DETAIL' | 'EDITOR' | 'SETTINGS'
       const [currentView, setCurrentView] = useState('LIST');
 
-      // 2. useState for managing list of notes from localStorage
       const [notes, setNotes] = useState(() => {
         try {
           const saved = localStorage.getItem('notes_app_data');
@@ -590,7 +663,7 @@
             {
               id: '1',
               title: 'Welcome Note 📝',
-              body: 'Welcome to your Notes Application! Star notes as favourites, set reminders, and navigate between screens seamlessly.',
+              body: 'Welcome to your Notes Application! Star notes as favourites, set reminders, and write notes in a spacious, large editor.',
               isFavorite: true,
               reminder: null,
               createdAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -603,7 +676,6 @@
         }
       });
 
-      // 3. Form input state & selection state
       const [titleInput, setTitleInput] = useState('');
       const [bodyInput, setBodyInput] = useState('');
       const [reminderInput, setReminderInput] = useState('');
@@ -613,11 +685,9 @@
       const [showClearAllModal, setShowClearAllModal] = useState(false);
       const [searchTerm, setSearchTerm] = useState('');
 
-      // 4. useRef for input focus
       const titleInputRef = useRef(null);
       const bodyInputRef = useRef(null);
 
-      // Persist notes array to localStorage
       useEffect(() => {
         try {
           localStorage.setItem('notes_app_data', JSON.stringify(notes));
@@ -626,7 +696,6 @@
         }
       }, [notes]);
 
-      // Auto focus input when switching to EDITOR view using useRef
       useEffect(() => {
         if (currentView === 'EDITOR') {
           const timer = setTimeout(() => {
@@ -638,7 +707,6 @@
         }
       }, [currentView]);
 
-      // --- PAGE NAVIGATION HANDLERS ---
       const goToList = () => {
         setCurrentView('LIST');
         setEditingId(null);
@@ -674,7 +742,6 @@
         setCurrentView('SETTINGS');
       };
 
-      // --- FAVOURITES & REMINDERS HANDLERS ---
       const toggleFavorite = (id, e) => {
         if (e) e.stopPropagation();
         setNotes(notes.map(note =>
@@ -689,7 +756,6 @@
         ));
       };
 
-      // --- NOTE ACTIONS ---
       const handleSaveNote = (e) => {
         if (e) e.preventDefault();
         const trimmedTitle = titleInput.trim() || 'Untitled Note';
@@ -700,14 +766,12 @@
         const timeString = new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         if (editingId) {
-          // Update existing note
           setNotes(notes.map(note =>
             note.id === editingId
               ? { ...note, title: trimmedTitle, body: trimmedBody, reminder: reminderInput || null, updatedAt: timeString }
               : note
           ));
         } else {
-          // Add new note
           const newNote = {
             id: Date.now().toString(),
             title: trimmedTitle,
@@ -723,13 +787,11 @@
         goToList();
       };
 
-      // Open Delete Confirmation Modal
       const requestDeleteNote = (id, e) => {
         if (e) e.stopPropagation();
         setDeletingNoteId(id);
       };
 
-      // Perform Deletion
       const confirmDeleteNote = () => {
         if (!deletingNoteId) return;
         setNotes(notes.filter(note => note.id !== deletingNoteId));
@@ -765,368 +827,234 @@
         }
       };
 
-      return (
-        <div className="app-container">
+      return h('div', { className: 'app-container' },
+        // Top Navbar
+        h('div', { className: 'navbar' },
+          h('div', { className: 'navbar-brand' },
+            currentView !== 'LIST'
+              ? h('button', { onClick: goToList, className: 'btn btn-outline btn-sm' }, '← Back')
+              : h('span', null, '📝 Notes App')
+          ),
+          h('div', { className: 'nav-actions' },
+            currentView === 'LIST' && h('button', { onClick: goToAddNote, className: 'btn btn-primary btn-sm' }, '➕ New Note'),
+            currentView === 'DETAIL' && selectedNote && [
+              h('button', { key: 'fav', onClick: (e) => toggleFavorite(selectedNote.id, e), className: 'star-btn' }, selectedNote.isFavorite ? '⭐' : '☆'),
+              h('button', { key: 'edit', onClick: (e) => goToEditNote(selectedNote, e), className: 'btn btn-outline btn-sm' }, '✏️ Edit'),
+              h('button', { key: 'del', onClick: (e) => requestDeleteNote(selectedNote.id, e), className: 'btn btn-danger btn-sm' }, '🗑️ Delete')
+            ]
+          )
+        ),
 
-          {/* TOP NAVBAR */}
-          <div className="navbar">
-            <div className="navbar-brand">
-              {currentView !== 'LIST' ? (
-                <button onClick={goToList} className="btn btn-outline btn-sm">
-                  ← Back
-                </button>
-              ) : (
-                <span>📝 Notes App</span>
-              )}
-            </div>
+        // Layout 1: LIST VIEW
+        currentView === 'LIST' && h('div', null,
+          h('div', { className: 'search-bar' },
+            h('input', {
+              type: 'text',
+              className: 'search-input',
+              placeholder: '🔍 Search title or content...',
+              value: searchTerm,
+              onChange: (e) => setSearchTerm(e.target.value)
+            })
+          ),
+          h('div', { className: 'notes-header' },
+            h('h2', null, 'All Notes'),
+            h('span', { className: 'notes-count' }, `${filteredNotes.length} ${filteredNotes.length === 1 ? 'note' : 'notes'}`)
+          ),
+          h('div', { className: 'notes-grid' },
+            filteredNotes.length === 0
+              ? h('div', { className: 'card empty-state' },
+                  h('div', { className: 'empty-icon' }, '📁'),
+                  h('h3', null, 'No notes found'),
+                  h('p', { style: { marginTop: '6px' } }, searchTerm ? 'Try adjusting your search criteria.' : 'Tap "New Note" below to create your first note!'),
+                  !searchTerm && h('button', { onClick: goToAddNote, className: 'btn btn-primary', style: { marginTop: '16px' } }, '➕ Create Note')
+                )
+              : filteredNotes.map(note =>
+                  h('div', { key: note.id, className: 'note-card', onClick: () => goToDetail(note) },
+                    h('div', { className: 'note-card-top' },
+                      h('div', { className: 'note-title' }, note.title),
+                      h('button', { onClick: (e) => toggleFavorite(note.id, e), className: 'star-btn', title: 'Toggle Favourite' }, note.isFavorite ? '⭐' : '☆')
+                    ),
+                    note.reminder && h('div', { style: { marginBottom: '8px' } },
+                      h('span', { className: 'reminder-badge' }, `⏰ ${formatReminderDate(note.reminder)}`)
+                    ),
+                    h('div', { className: 'note-snippet' }, note.body),
+                    h('div', { className: 'note-footer' },
+                      h('span', { className: 'note-date' }, note.updatedAt ? `Updated: ${note.updatedAt}` : `Created: ${note.createdAt}`),
+                      h('div', { className: 'note-actions' },
+                        h('button', { onClick: (e) => goToEditNote(note, e), className: 'btn btn-outline btn-sm' }, '✏️ Edit'),
+                        h('button', { onClick: (e) => requestDeleteNote(note.id, e), className: 'btn btn-danger btn-sm' }, '🗑️')
+                      )
+                    )
+                  )
+                )
+          )
+        ),
 
-            <div className="nav-actions">
-              {currentView === 'LIST' && (
-                <button onClick={goToAddNote} className="btn btn-primary btn-sm">
-                  ➕ New Note
-                </button>
-              )}
-              {currentView === 'DETAIL' && selectedNote && (
-                <>
-                  <button onClick={(e) => toggleFavorite(selectedNote.id, e)} className="star-btn">
-                    {selectedNote.isFavorite ? '⭐' : '☆'}
-                  </button>
-                  <button onClick={(e) => goToEditNote(selectedNote, e)} className="btn btn-outline btn-sm">
-                    ✏️ Edit
-                  </button>
-                  <button onClick={(e) => requestDeleteNote(selectedNote.id, e)} className="btn btn-danger btn-sm">
-                    🗑️ Delete
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+        // Layout 2: DETAIL VIEW
+        currentView === 'DETAIL' && selectedNote && h('div', { className: 'card detail-container' },
+          h('div', { className: 'detail-title' },
+            h('span', null, selectedNote.title),
+            h('button', { onClick: (e) => toggleFavorite(selectedNote.id, e), className: 'star-btn' }, selectedNote.isFavorite ? '⭐' : '☆')
+          ),
+          h('div', null,
+            h('span', { className: 'meta-badge' }, `📅 ${selectedNote.updatedAt ? `Updated ${selectedNote.updatedAt}` : `Created ${selectedNote.createdAt}`}`),
+            h('span', { className: 'meta-badge' }, `📊 ${selectedNote.body ? selectedNote.body.trim().split(/\s+/).length : 0} words`),
+            h('span', { className: 'meta-badge' }, `🔤 ${selectedNote.body ? selectedNote.body.length : 0} chars`),
+            selectedNote.reminder && h('span', { className: 'reminder-badge', style: { fontSize: '12px' } }, `⏰ Reminder: ${formatReminderDate(selectedNote.reminder)}`)
+          ),
+          h('div', { className: 'detail-body' }, selectedNote.body),
+          h('div', { className: 'button-group', style: { marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' } },
+            h('button', { onClick: goToList, className: 'btn btn-secondary' }, '← Back to List'),
+            h('button', { onClick: (e) => goToEditNote(selectedNote, e), className: 'btn btn-primary' }, '✏️ Edit Note'),
+            h('button', { onClick: (e) => requestDeleteNote(selectedNote.id, e), className: 'btn btn-danger' }, '🗑️ Delete')
+          )
+        ),
 
-          {/* ==================== LAYOUT 1: NOTES LIST VIEW ==================== */}
-          {currentView === 'LIST' && (
-            <div>
-              {/* Search Filter */}
-              <div className="search-bar">
-                <input
-                  type="text"
-                  className="search-input"
-                  placeholder="🔍 Search title or content..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+        // Layout 3: SPACIOUS ADD / EDIT NOTE EDITOR VIEW
+        currentView === 'EDITOR' && h('div', { className: 'editor-card' },
+          h('div', { className: 'editor-title' }, editingId ? '✏️ Edit Note' : '➕ Create New Note'),
+          h('form', { onSubmit: handleSaveNote, className: 'input-form' },
+            h('div', { className: 'input-group' },
+              h('label', { htmlFor: 'titleInput' }, 'Note Title'),
+              h('input', {
+                id: 'titleInput',
+                type: 'text',
+                className: 'input-title-large',
+                ref: titleInputRef,
+                value: titleInput,
+                onChange: (e) => setTitleInput(e.target.value),
+                placeholder: 'Enter note title...'
+              })
+            ),
+            h('div', { className: 'input-group', style: { flexGrow: 1, display: 'flex', flexDirection: 'column' } },
+              h('label', { htmlFor: 'bodyInput' }, 'Note Content'),
+              h('textarea', {
+                id: 'bodyInput',
+                className: 'textarea-large',
+                ref: bodyInputRef,
+                value: bodyInput,
+                onChange: (e) => setBodyInput(e.target.value),
+                placeholder: 'Type note details here...'
+              })
+            ),
+            h('div', { className: 'input-group' },
+              h('label', { htmlFor: 'reminderInput' }, '⏰ Set Reminder (Optional)'),
+              h('input', {
+                id: 'reminderInput',
+                type: 'datetime-local',
+                value: reminderInput,
+                onChange: (e) => setReminderInput(e.target.value)
+              })
+            ),
+            h('div', { className: 'button-group' },
+              h('button', { type: 'submit', className: 'btn btn-primary btn-large' }, '💾 Save Note'),
+              h('button', { type: 'button', onClick: goToList, className: 'btn btn-secondary btn-large' }, 'Cancel')
+            )
+          )
+        ),
 
-              <div className="notes-header">
-                <h2>All Notes</h2>
-                <span className="notes-count">
-                  {filteredNotes.length} {filteredNotes.length === 1 ? 'note' : 'notes'}
-                </span>
-              </div>
+        // Layout 4: SETTINGS VIEW
+        currentView === 'SETTINGS' && h('div', { className: 'card' },
+          h('h2', { style: { marginBottom: '16px' } }, '⚙️ App Settings & Overview'),
+          h('div', { className: 'stat-row' },
+            h('span', null, 'Total Saved Notes'),
+            h('span', { className: 'stat-value' }, notes.length)
+          ),
+          h('div', { className: 'stat-row' },
+            h('span', null, 'Total Words Stored'),
+            h('span', { className: 'stat-value' }, notes.reduce((acc, curr) => acc + (curr.body ? curr.body.trim().split(/\s+/).filter(Boolean).length : 0), 0))
+          ),
+          h('div', { className: 'settings-section' },
+            h('h3', null, `⭐ Favourites (${favoriteNotes.length})`),
+            favoriteNotes.length === 0
+              ? h('p', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, 'No favourite notes starred yet.')
+              : favoriteNotes.map(note =>
+                  h('div', { key: note.id, className: 'mini-card', onClick: () => goToDetail(note) },
+                    h('div', null,
+                      h('div', { style: { fontWeight: 600, fontSize: '14px' } }, note.title),
+                      h('div', { style: { fontSize: '12px', color: 'var(--text-muted)' } }, note.createdAt)
+                    ),
+                    h('button', { onClick: (e) => toggleFavorite(note.id, e), className: 'star-btn', title: 'Remove Favourite' }, '⭐')
+                  )
+                )
+          ),
+          h('div', { className: 'settings-section' },
+            h('h3', null, '📌 All Notes'),
+            notes.length === 0
+              ? h('p', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, 'No notes available.')
+              : h('ul', { className: 'bullet-list' },
+                  notes.map(note =>
+                    h('li', { key: note.id, onClick: () => goToDetail(note), className: 'bullet-item' },
+                      h('span', null, `• ${note.title}`),
+                      h('span', null, note.isFavorite ? '⭐' : '›')
+                    )
+                  )
+                )
+          ),
+          h('div', { className: 'settings-section' },
+            h('h3', null, `⏰ Reminders (${reminderNotes.length})`),
+            reminderNotes.length === 0
+              ? h('p', { style: { fontSize: '13px', color: 'var(--text-muted)' } }, 'No active reminders scheduled.')
+              : reminderNotes.map(note =>
+                  h('div', { key: note.id, className: 'mini-card', onClick: () => goToDetail(note) },
+                    h('div', null,
+                      h('div', { style: { fontWeight: 600, fontSize: '14px' } }, note.title),
+                      h('div', { className: 'reminder-badge', style: { marginTop: '4px' } }, `⏰ ${formatReminderDate(note.reminder)}`)
+                    ),
+                    h('button', { onClick: (e) => clearReminder(note.id, e), className: 'btn btn-outline btn-sm', title: 'Clear Reminder' }, '🔕 Clear')
+                  )
+                )
+          ),
+          h('div', { style: { marginTop: '24px' } },
+            h('button', { onClick: () => setShowClearAllModal(true), className: 'btn btn-danger', style: { width: '100%' } }, '🗑️ Clear All Saved Data')
+          )
+        ),
 
-              <div className="notes-grid">
-                {filteredNotes.length === 0 ? (
-                  <div className="card empty-state">
-                    <div className="empty-icon">📁</div>
-                    <h3>No notes found</h3>
-                    <p style={{ marginTop: '6px' }}>
-                      {searchTerm ? 'Try adjusting your search criteria.' : 'Tap "New Note" below to create your first note!'}
-                    </p>
-                    {!searchTerm && (
-                      <button onClick={goToAddNote} className="btn btn-primary" style={{ marginTop: '16px' }}>
-                        ➕ Create Note
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  filteredNotes.map(note => (
-                    <div key={note.id} className="note-card" onClick={() => goToDetail(note)}>
-                      <div className="note-card-top">
-                        <div className="note-title">{note.title}</div>
-                        <button onClick={(e) => toggleFavorite(note.id, e)} className="star-btn" title="Toggle Favourite">
-                          {note.isFavorite ? '⭐' : '☆'}
-                        </button>
-                      </div>
+        // Bottom Navigation Bar
+        h('div', { className: 'bottom-nav' },
+          h('button', { onClick: goToList, className: `nav-item ${currentView === 'LIST' ? 'active' : ''}` },
+            h('span', { className: 'nav-item-icon' }, '📋'),
+            h('span', null, 'Notes List')
+          ),
+          h('button', { onClick: goToAddNote, className: `nav-item ${currentView === 'EDITOR' ? 'active' : ''}` },
+            h('span', { className: 'nav-item-icon' }, '➕'),
+            h('span', null, 'New Note')
+          ),
+          h('button', { onClick: goToSettings, className: `nav-item ${currentView === 'SETTINGS' ? 'active' : ''}` },
+            h('span', { className: 'nav-item-icon' }, '⚙️'),
+            h('span', null, 'Settings')
+          )
+        ),
 
-                      {note.reminder && (
-                        <div style={{ marginBottom: '8px' }}>
-                          <span className="reminder-badge">
-                            ⏰ {formatReminderDate(note.reminder)}
-                          </span>
-                        </div>
-                      )}
+        // Delete Modal
+        deletingNoteId && h('div', { className: 'modal-overlay', onClick: () => setDeletingNoteId(null) },
+          h('div', { className: 'modal-card', onClick: (e) => e.stopPropagation() },
+            h('h3', { style: { fontSize: '18px', marginBottom: '8px' } }, '🗑️ Delete Note'),
+            h('p', { style: { fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' } }, 'Are you sure you want to delete this note? This action cannot be undone.'),
+            h('div', { className: 'button-group', style: { justifyContent: 'flex-end' } },
+              h('button', { onClick: () => setDeletingNoteId(null), className: 'btn btn-secondary btn-sm' }, 'Cancel'),
+              h('button', { onClick: confirmDeleteNote, className: 'btn btn-danger btn-sm' }, 'Yes, Delete')
+            )
+          )
+        ),
 
-                      <div className="note-snippet">{note.body}</div>
-
-                      <div className="note-footer">
-                        <span className="note-date">
-                          {note.updatedAt ? `Updated: ${note.updatedAt}` : `Created: ${note.createdAt}`}
-                        </span>
-                        <div className="note-actions">
-                          <button onClick={(e) => goToEditNote(note, e)} className="btn btn-outline btn-sm">
-                            ✏️ Edit
-                          </button>
-                          <button onClick={(e) => requestDeleteNote(note.id, e)} className="btn btn-danger btn-sm">
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ==================== LAYOUT 2: NOTE DETAIL VIEW ==================== */}
-          {currentView === 'DETAIL' && selectedNote && (
-            <div className="card detail-container">
-              <div className="detail-title">
-                <span>{selectedNote.title}</span>
-                <button onClick={(e) => toggleFavorite(selectedNote.id, e)} className="star-btn">
-                  {selectedNote.isFavorite ? '⭐' : '☆'}
-                </button>
-              </div>
-
-              <div>
-                <span className="meta-badge">📅 {selectedNote.updatedAt ? `Updated ${selectedNote.updatedAt}` : `Created ${selectedNote.createdAt}`}</span>
-                <span className="meta-badge">📊 {selectedNote.body ? selectedNote.body.trim().split(/\s+/).length : 0} words</span>
-                <span className="meta-badge">🔤 {selectedNote.body ? selectedNote.body.length : 0} chars</span>
-                {selectedNote.reminder && (
-                  <span className="reminder-badge" style={{ fontSize: '12px' }}>
-                    ⏰ Reminder: {formatReminderDate(selectedNote.reminder)}
-                  </span>
-                )}
-              </div>
-
-              <div className="detail-body">
-                {selectedNote.body}
-              </div>
-
-              <div className="button-group" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-                <button onClick={goToList} className="btn btn-secondary">
-                  ← Back to List
-                </button>
-                <button onClick={(e) => goToEditNote(selectedNote, e)} className="btn btn-primary">
-                  ✏️ Edit Note
-                </button>
-                <button onClick={(e) => requestDeleteNote(selectedNote.id, e)} className="btn btn-danger">
-                  🗑️ Delete
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ==================== LAYOUT 3: ADD / EDIT NOTE EDITOR VIEW ==================== */}
-          {currentView === 'EDITOR' && (
-            <div className="card">
-              <h2 style={{ marginBottom: '16px' }}>
-                {editingId ? '✏️ Edit Note' : '➕ Create New Note'}
-              </h2>
-
-              <form onSubmit={handleSaveNote} className="input-form">
-                <div className="input-group">
-                  <label htmlFor="titleInput">Note Title</label>
-                  <input
-                    id="titleInput"
-                    type="text"
-                    ref={titleInputRef}
-                    value={titleInput}
-                    onChange={(e) => setTitleInput(e.target.value)}
-                    placeholder="Enter note title..."
-                  />
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="bodyInput">Note Content</label>
-                  <textarea
-                    id="bodyInput"
-                    ref={bodyInputRef}
-                    value={bodyInput}
-                    onChange={(e) => setBodyInput(e.target.value)}
-                    placeholder="Type note details here..."
-                    rows="6"
-                  />
-                </div>
-
-                <div className="input-group">
-                  <label htmlFor="reminderInput">⏰ Set Reminder (Optional)</label>
-                  <input
-                    id="reminderInput"
-                    type="datetime-local"
-                    value={reminderInput}
-                    onChange={(e) => setReminderInput(e.target.value)}
-                  />
-                </div>
-
-                <div className="button-group">
-                  <button type="submit" className="btn btn-primary">
-                    💾 Save Note
-                  </button>
-                  <button type="button" onClick={goToList} className="btn btn-secondary">
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* ==================== LAYOUT 4: SETTINGS VIEW ==================== */}
-          {currentView === 'SETTINGS' && (
-            <div className="card">
-              <h2 style={{ marginBottom: '16px' }}>⚙️ App Settings & Overview</h2>
-
-              <div className="stat-row">
-                <span>Total Saved Notes</span>
-                <span className="stat-value">{notes.length}</span>
-              </div>
-              <div className="stat-row">
-                <span>Total Words Stored</span>
-                <span className="stat-value">
-                  {notes.reduce((acc, curr) => acc + (curr.body ? curr.body.trim().split(/\s+/).filter(Boolean).length : 0), 0)}
-                </span>
-              </div>
-
-              {/* 1. FAVOURITES SECTION */}
-              <div className="settings-section">
-                <h3>⭐ Favourites ({favoriteNotes.length})</h3>
-                {favoriteNotes.length === 0 ? (
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No favourite notes starred yet.</p>
-                ) : (
-                  favoriteNotes.map(note => (
-                    <div key={note.id} className="mini-card" onClick={() => goToDetail(note)}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '14px' }}>{note.title}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{note.createdAt}</div>
-                      </div>
-                      <button onClick={(e) => toggleFavorite(note.id, e)} className="star-btn" title="Remove Favourite">
-                        ⭐
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* 2. ALL NOTES SECTION */}
-              <div className="settings-section">
-                <h3>📌 All Notes</h3>
-                {notes.length === 0 ? (
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No notes available.</p>
-                ) : (
-                  <ul className="bullet-list">
-                    {notes.map(note => (
-                      <li key={note.id} onClick={() => goToDetail(note)} className="bullet-item">
-                        <span>• {note.title}</span>
-                        <span>{note.isFavorite ? '⭐' : '›'}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* 3. REMINDERS SECTION */}
-              <div className="settings-section">
-                <h3>⏰ Reminders ({reminderNotes.length})</h3>
-                {reminderNotes.length === 0 ? (
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No active reminders scheduled.</p>
-                ) : (
-                  reminderNotes.map(note => (
-                    <div key={note.id} className="mini-card" onClick={() => goToDetail(note)}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '14px' }}>{note.title}</div>
-                        <div className="reminder-badge" style={{ marginTop: '4px' }}>
-                          ⏰ {formatReminderDate(note.reminder)}
-                        </div>
-                      </div>
-                      <button onClick={(e) => clearReminder(note.id, e)} className="btn btn-outline btn-sm" title="Clear Reminder">
-                        🔕 Clear
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div style={{ marginTop: '24px' }}>
-                <button onClick={() => setShowClearAllModal(true)} className="btn btn-danger" style={{ width: '100%' }}>
-                  🗑️ Clear All Saved Data
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* BOTTOM NAVIGATION BAR */}
-          <div className="bottom-nav">
-            <button
-              onClick={goToList}
-              className={`nav-item ${currentView === 'LIST' ? 'active' : ''}`}
-            >
-              <span className="nav-item-icon">📋</span>
-              <span>Notes List</span>
-            </button>
-
-            <button
-              onClick={goToAddNote}
-              className={`nav-item ${currentView === 'EDITOR' ? 'active' : ''}`}
-            >
-              <span className="nav-item-icon">➕</span>
-              <span>New Note</span>
-            </button>
-
-            <button
-              onClick={goToSettings}
-              className={`nav-item ${currentView === 'SETTINGS' ? 'active' : ''}`}
-            >
-              <span className="nav-item-icon">⚙️</span>
-              <span>Settings</span>
-            </button>
-          </div>
-
-          {/* DELETE NOTE MODAL */}
-          {deletingNoteId && (
-            <div className="modal-overlay" onClick={() => setDeletingNoteId(null)}>
-              <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-                <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>🗑️ Delete Note</h3>
-                <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                  Are you sure you want to delete this note? This action cannot be undone.
-                </p>
-                <div className="button-group" style={{ justifyContent: 'flex-end' }}>
-                  <button onClick={() => setDeletingNoteId(null)} className="btn btn-secondary btn-sm">
-                    Cancel
-                  </button>
-                  <button onClick={confirmDeleteNote} className="btn btn-danger btn-sm">
-                    Yes, Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* CLEAR ALL DATA MODAL */}
-          {showClearAllModal && (
-            <div className="modal-overlay" onClick={() => setShowClearAllModal(false)}>
-              <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-                <h3 style={{ fontSize: '18px', marginBottom: '8px', color: 'var(--danger-color)' }}>⚠️ Clear All Data</h3>
-                <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                  WARNING: This will permanently delete ALL your saved notes from local storage. Are you sure?
-                </p>
-                <div className="button-group" style={{ justifyContent: 'flex-end' }}>
-                  <button onClick={() => setShowClearAllModal(false)} className="btn btn-secondary btn-sm">
-                    Cancel
-                  </button>
-                  <button onClick={confirmClearAllData} className="btn btn-danger btn-sm">
-                    Clear All
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-        </div>
+        // Clear All Modal
+        showClearAllModal && h('div', { className: 'modal-overlay', onClick: () => setShowClearAllModal(false) },
+          h('div', { className: 'modal-card', onClick: (e) => e.stopPropagation() },
+            h('h3', { style: { fontSize: '18px', marginBottom: '8px', color: 'var(--danger-color)' } }, '⚠️ Clear All Data'),
+            h('p', { style: { fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' } }, 'WARNING: This will permanently delete ALL your saved notes from local storage. Are you sure?'),
+            h('div', { className: 'button-group', style: { justifyContent: 'flex-end' } },
+              h('button', { onClick: () => setShowClearAllModal(false), className: 'btn btn-secondary btn-sm' }, 'Cancel'),
+              h('button', { onClick: confirmClearAllData, className: 'btn btn-danger btn-sm' }, 'Clear All')
+            )
+          )
+        )
       );
     }
 
     const rootElement = document.getElementById('root');
     const root = ReactDOM.createRoot(rootElement);
-    root.render(<NotesApp />);
+    root.render(React.createElement(NotesApp));
   </script>
 </body>
 </html>
